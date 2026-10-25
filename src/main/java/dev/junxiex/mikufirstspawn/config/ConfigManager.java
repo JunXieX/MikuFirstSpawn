@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 import java.util.logging.Level;
@@ -29,6 +30,11 @@ public final class ConfigManager {
 
     public static final String DEFAULT_WELCOME = "<green>欢迎来到服务器！</green>";
     private static final int CONFIG_VERSION = 1;
+    private static final Set<String> KNOWN_KEYS = Set.of(
+            "config-version", "enabled",
+            "spawn", "spawn.world", "spawn.x", "spawn.y", "spawn.z", "spawn.yaw", "spawn.pitch",
+            "fallback", "fallback.enabled", "fallback.delay-ticks", "fallback.max-attempts", "fallback.retry-delay-ticks",
+            "set-respawn-location", "messages", "messages.welcome", "debug");
 
     private final Plugin plugin;
     private final ExecutorService ioExecutor;
@@ -102,7 +108,11 @@ public final class ConfigManager {
                     previous.setRespawnLocation(), previous.welcomeMessage(), previous.debug());
             snapshot = updated;
         }
-        ioExecutor.execute(() -> write(updated));
+        try {
+            ioExecutor.execute(() -> write(updated));
+        } catch (RuntimeException exception) {
+            plugin.getLogger().log(Level.SEVERE, "提交配置写盘任务失败", exception);
+        }
     }
 
     private YamlConfiguration readFromDisk() throws IOException, InvalidConfigurationException {
@@ -112,6 +122,12 @@ public final class ConfigManager {
     }
 
     private PluginConfig parse(ConfigurationSection yaml) {
+        int configVersion = yaml.getInt("config-version", CONFIG_VERSION);
+        if (configVersion > CONFIG_VERSION) {
+            plugin.getLogger().warning("config.yml 的 config-version=" + configVersion
+                    + " 高于插件支持的 " + CONFIG_VERSION + "，将按当前版本解析，未知项会被忽略");
+        }
+
         String world = yaml.getString("spawn.world", "");
         double x = yaml.getDouble("spawn.x", 0.0D);
         double y = yaml.getDouble("spawn.y", 64.0D);
@@ -192,9 +208,33 @@ public final class ConfigManager {
             yaml.set("debug", config.debug());
             yaml.setComments("debug", List.of("调试日志（排查问题时开启）。"));
 
+            mergeUnknownKeys(yaml);
             writeAtomically(yaml.saveToString());
-        } catch (IOException exception) {
+        } catch (IOException | RuntimeException exception) {
             plugin.getLogger().log(Level.SEVERE, "写入 config.yml 失败", exception);
+        }
+    }
+
+    /**
+     * 保留管理员在 config.yml 里自加的其他键，避免 /firstspawn set 写回时丢失。
+     */
+    private void mergeUnknownKeys(YamlConfiguration target) {
+        try {
+            if (!this.file.isFile()) {
+                return;
+            }
+            YamlConfiguration existing = YamlConfiguration.loadConfiguration(this.file);
+            for (String key : existing.getKeys(true)) {
+                if (KNOWN_KEYS.contains(key) || existing.isConfigurationSection(key)) {
+                    continue;
+                }
+                Object value = existing.get(key);
+                if (value != null && !target.contains(key)) {
+                    target.set(key, value);
+                }
+            }
+        } catch (RuntimeException exception) {
+            plugin.getLogger().log(Level.WARNING, "读取旧配置以保留自定义键时失败（已忽略）", exception);
         }
     }
 

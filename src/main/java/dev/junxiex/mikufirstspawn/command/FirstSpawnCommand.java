@@ -118,11 +118,13 @@ public final class FirstSpawnCommand {
         sender.sendMessage(Component.text("正在重新读取 config.yml ...", NamedTextColor.GRAY));
         configManager.reloadAsync(result -> {
             if (!result.success()) {
-                sendLater(sender, Component.text("配置重载失败："
-                        + result.error().getMessage(), NamedTextColor.RED));
+                String reason = describeError(result.error());
+                plugin.getLogger().warning("配置重载失败：" + reason);
+                sendLater(sender, Component.text("配置重载失败：" + reason, NamedTextColor.RED));
                 return;
             }
             PluginConfig config = result.config();
+            plugin.getLogger().info("配置已重载，出生点：" + config.spawn().describe());
             sendLater(sender, Component.text("配置已重载。", NamedTextColor.GREEN));
             if (!config.enabled()) {
                 sendLater(sender, Component.text("注意：enabled 为 false，自动传送仍关闭。", NamedTextColor.YELLOW));
@@ -201,7 +203,7 @@ public final class FirstSpawnCommand {
         }
         configManager.updateSpawn(spawn);
         sender.sendMessage(Component.text("首次出生点已设置为：" + spawn.describe(), NamedTextColor.GREEN));
-        sender.sendMessage(Component.text("配置已保存，新玩家进服将直接出现在该位置。", NamedTextColor.GRAY));
+        sender.sendMessage(Component.text("设置已立即生效，正在写入 config.yml。", NamedTextColor.GRAY));
         plugin.getLogger().info(sender.getName() + " 设置了首次出生点：" + spawn.describe());
         return Command.SINGLE_SUCCESS;
     }
@@ -210,8 +212,14 @@ public final class FirstSpawnCommand {
         if (sender instanceof Player player) {
             player.getScheduler().execute(plugin, () -> sender.sendMessage(message), null, 0L);
         } else {
-            sender.sendMessage(message);
+            // 控制台/RCON 的回复统一回到全局区域线程再发送。
+            Bukkit.getGlobalRegionScheduler().execute(plugin, () -> sender.sendMessage(message));
         }
+    }
+
+    private static String describeError(Exception exception) {
+        String message = exception.getMessage();
+        return message == null || message.isBlank() ? exception.getClass().getSimpleName() : message;
     }
 
     private static String platformDescription() {

@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -28,17 +32,6 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
-      - name: Build
-        run: ./gradlew build --no-daemon
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: MikuFirstSpawn
-          retention-days: 3
-          path: build/libs/*.jar
-          if-no-files-found: error
-
       - name: Check tag and version consistency
         if: startsWith(github.ref, 'refs/tags/')
         env:
@@ -51,12 +44,23 @@ jobs:
             echo "tag $TAG 与 build.gradle.kts version $VER 不一致" >&2
             exit 1
           fi
-          git log -1 --pretty=%B "${REF_NAME}" | tail -n +2 > release_notes.md
+          git log -1 --pretty=%B "${REF_NAME}" | tail -n +2 | sed '/./,$!d' > release_notes.md
           if [ ! -s release_notes.md ]; then
             echo "发版提交正文缺少结构化更新日志" >&2
             exit 1
           fi
           cat release_notes.md
+
+      - name: Build
+        run: ./gradlew build --no-daemon
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: MikuFirstSpawn
+          retention-days: 3
+          path: build/libs/*.jar
+          if-no-files-found: error
 
       - name: Publish Release
         if: startsWith(github.ref, 'refs/tags/')

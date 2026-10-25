@@ -28,7 +28,7 @@ public final class FirstSpawnService {
 
     private static final long WARN_INTERVAL_MILLIS = 60_000L;
     private static final long MARKER_TTL_MILLIS = 300_000L;
-    private static final int MARKER_PURGE_THRESHOLD = 4096;
+    private static final int MARKER_PURGE_THRESHOLD = 256;
     private static final int WARN_CLEANUP_THRESHOLD = 256;
 
     private final JavaPlugin plugin;
@@ -114,19 +114,27 @@ public final class FirstSpawnService {
             }
 
             SpawnLocation spawn = config.spawn();
-            Location target = spawn.resolve();
-            if (target == null) {
+            if (!spawn.configured()) {
                 warnSpawnProblem(spawn);
                 return;
             }
 
+            Location target = spawn.resolve();
+            if (target != null && isAtTarget(player, target)) {
+                // 登录阶段其实已经生效（例如当时因资料读取失败没写入内存标记），不必再传送一次。
+                appliedAtLogin = true;
+            }
+
             if (!appliedAtLogin && config.fallback().enabled()) {
+                // 即使这一刻出生点世界还没加载，也进入兜底流程：每次尝试都会重新解析，世界加载后可自动成功。
                 scheduleFallback(player, config, 1);
             }
 
             sendWelcome(player, config);
 
-            if (config.setRespawnLocation()) {
+            if (target == null) {
+                warnSpawnProblem(spawn);
+            } else if (config.setRespawnLocation()) {
                 applyRespawnLocation(player, target, config);
             }
 
@@ -209,10 +217,11 @@ public final class FirstSpawnService {
 
     private void applyRespawnLocation(Player player, Location target, PluginConfig config) {
         // 实体状态修改必须在该实体所属区域线程执行。
-        // force=false：不在区域线程里强制加载目标区块，避免 Folia 下跨区域阻塞。
+        // override=true：普通坐标才会被当作有效重生点；false 时非床/重生锚坐标会在重生校验中被忽略。
+        // 该调用只记录重生配置并触发 PlayerSetSpawnEvent，不会在设置时同步加载区块，Folia 下安全。
         player.getScheduler().execute(plugin, () -> {
             try {
-                player.setRespawnLocation(target, false);
+                player.setRespawnLocation(target, true);
                 if (config.debug()) {
                     plugin.getLogger().info("[debug] 已设置首次进服重生点：" + player.getName());
                 }
@@ -255,6 +264,9 @@ public final class FirstSpawnService {
                         plugin.getLogger().info("[debug] 兜底传送成功："
                                 + player.getName() + " -> " + spawn.describe());
                     }
+                    if (config.setRespawnLocation()) {
+                        applyRespawnLocation(player, target, config);
+                    }
                     return;
                 }
                 if (config.debug()) {
@@ -280,6 +292,14 @@ public final class FirstSpawnService {
         player.getScheduler().runDelayed(plugin,
                 task -> attemptFallback(player, config, nextAttempt), null,
                 config.fallback().retryDelayTicks());
+    }
+
+    private static boolean isAtTarget(Player player, Location target) {
+        Location current = player.getLocation();
+        return current.getWorld() != null && current.getWorld().equals(target.getWorld())
+                && current.getBlockX() == target.getBlockX()
+                && current.getBlockY() == target.getBlockY()
+                && current.getBlockZ() == target.getBlockZ();
     }
 
     private void markLoginApplied(UUID playerId) {
