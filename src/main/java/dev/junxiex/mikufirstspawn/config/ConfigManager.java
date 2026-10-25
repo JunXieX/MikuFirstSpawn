@@ -9,7 +9,6 @@ import org.bukkit.plugin.Plugin;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -193,9 +192,7 @@ public final class ConfigManager {
             yaml.set("debug", config.debug());
             yaml.setComments("debug", List.of("调试日志（排查问题时开启）。"));
 
-            StringWriter writer = new StringWriter();
-            yaml.save(writer);
-            writeAtomically(writer.toString());
+            writeAtomically(yaml.saveToString());
         } catch (IOException exception) {
             plugin.getLogger().log(Level.SEVERE, "写入 config.yml 失败", exception);
         }
