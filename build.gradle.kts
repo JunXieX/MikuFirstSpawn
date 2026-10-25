@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "dev.junxiex"
-version = "1.0.3"
+version = "1.0.4"
 description = "MikuFirstSpawn - first-join spawn plugin for Paper and Folia"
 
 java {

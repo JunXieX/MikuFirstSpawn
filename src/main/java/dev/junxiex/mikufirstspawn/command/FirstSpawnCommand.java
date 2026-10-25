@@ -25,6 +25,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.List;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 /**
@@ -209,11 +210,16 @@ public final class FirstSpawnCommand {
     }
 
     private void sendLater(CommandSender sender, Component message) {
-        if (sender instanceof Player player) {
-            player.getScheduler().execute(plugin, () -> sender.sendMessage(message), null, 0L);
-        } else {
-            // 控制台/RCON 的回复统一回到全局区域线程再发送。
-            Bukkit.getGlobalRegionScheduler().execute(plugin, () -> sender.sendMessage(message));
+        try {
+            if (sender instanceof Player player) {
+                player.getScheduler().execute(plugin, () -> sender.sendMessage(message), null, 0L);
+            } else {
+                // 控制台/RCON 的回复统一回到全局区域线程再发送。
+                Bukkit.getGlobalRegionScheduler().execute(plugin, () -> sender.sendMessage(message));
+            }
+        } catch (RuntimeException exception) {
+            // 插件正在关闭时调度器可能已拒绝任务；此时丢弃反馈即可，不影响玩家。
+            plugin.getLogger().log(Level.WARNING, "发送命令回复失败（插件可能正在关闭）", exception);
         }
     }
 

@@ -75,26 +75,30 @@ public final class ConfigManager {
      */
     public void reloadAsync(Consumer<ReloadResult> callback) {
         PluginConfig before = snapshot;
-        ioExecutor.execute(() -> {
-            ReloadResult result;
-            try {
-                PluginConfig parsed = parse(readFromDisk());
-                PluginConfig applied;
-                synchronized (stateLock) {
-                    // 期间如果管理员又执行了 /firstspawn set，则以新设置为准。
-                    if (snapshot == before) {
-                        snapshot = parsed;
+        try {
+            ioExecutor.execute(() -> {
+                ReloadResult result;
+                try {
+                    PluginConfig parsed = parse(readFromDisk());
+                    PluginConfig applied;
+                    synchronized (stateLock) {
+                        // 期间如果管理员又执行了 /firstspawn set，则以新设置为准。
+                        if (snapshot == before) {
+                            snapshot = parsed;
+                        }
+                        applied = snapshot;
                     }
-                    applied = snapshot;
+                    result = ReloadResult.ok(applied);
+                } catch (IOException | InvalidConfigurationException exception) {
+                    result = ReloadResult.failure(exception);
+                } catch (RuntimeException exception) {
+                    result = ReloadResult.failure(exception);
                 }
-                result = ReloadResult.ok(applied);
-            } catch (IOException | InvalidConfigurationException exception) {
-                result = ReloadResult.failure(exception);
-            } catch (RuntimeException exception) {
-                result = ReloadResult.failure(exception);
-            }
-            callback.accept(result);
-        });
+                callback.accept(result);
+            });
+        } catch (RuntimeException exception) {
+            callback.accept(ReloadResult.failure(exception));
+        }
     }
 
     /**
@@ -172,7 +176,9 @@ public final class ConfigManager {
                     "作者：JunXieX  |  MikuMC系列插件交流群：1105054380",
                     "============================================================"));
 
-            yaml.set("config-version", CONFIG_VERSION);
+            // 先合并旧文件里的自定义键，再写已知键：即使自定义键与已知键路径冲突，也以插件写入为准。
+            int existingVersion = mergeUnknownKeys(yaml);
+            yaml.set("config-version", Math.max(CONFIG_VERSION, existingVersion));
             yaml.set("enabled", config.enabled());
             yaml.setComments("enabled", List.of("是否启用自动传送。关闭后不会传送任何玩家，但命令仍可使用。"));
 
@@ -208,7 +214,6 @@ public final class ConfigManager {
             yaml.set("debug", config.debug());
             yaml.setComments("debug", List.of("调试日志（排查问题时开启）。"));
 
-            mergeUnknownKeys(yaml);
             writeAtomically(yaml.saveToString());
         } catch (IOException | RuntimeException exception) {
             plugin.getLogger().log(Level.SEVERE, "写入 config.yml 失败", exception);
@@ -218,23 +223,26 @@ public final class ConfigManager {
     /**
      * 保留管理员在 config.yml 里自加的其他键，避免 /firstspawn set 写回时丢失。
      */
-    private void mergeUnknownKeys(YamlConfiguration target) {
+    private int mergeUnknownKeys(YamlConfiguration target) {
         try {
             if (!this.file.isFile()) {
-                return;
+                return CONFIG_VERSION;
             }
             YamlConfiguration existing = YamlConfiguration.loadConfiguration(this.file);
+            int version = existing.getInt("config-version", CONFIG_VERSION);
             for (String key : existing.getKeys(true)) {
                 if (KNOWN_KEYS.contains(key) || existing.isConfigurationSection(key)) {
                     continue;
                 }
                 Object value = existing.get(key);
-                if (value != null && !target.contains(key)) {
+                if (value != null) {
                     target.set(key, value);
                 }
             }
+            return version;
         } catch (RuntimeException exception) {
             plugin.getLogger().log(Level.WARNING, "读取旧配置以保留自定义键时失败（已忽略）", exception);
+            return CONFIG_VERSION;
         }
     }
 

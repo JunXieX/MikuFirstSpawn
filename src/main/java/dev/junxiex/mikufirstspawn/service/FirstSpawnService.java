@@ -120,27 +120,41 @@ public final class FirstSpawnService {
             }
 
             Location target = spawn.resolve();
-            if (target != null && isAtTarget(player, target)) {
+            boolean alreadyAtTarget = target != null && isAtTarget(player, target);
+            if (alreadyAtTarget) {
                 // 登录阶段其实已经生效（例如当时因资料读取失败没写入内存标记），不必再传送一次。
                 appliedAtLogin = true;
             }
 
+            boolean fallbackScheduled = false;
             if (!appliedAtLogin && config.fallback().enabled()) {
-                // 即使这一刻出生点世界还没加载，也进入兜底流程：每次尝试都会重新解析，世界加载后可自动成功。
+                // 即使这一刻出生点世界还没加载，也进入兜底流程：每次尝试都会重新解析；
+                // 在世界加载完成后的重试窗口内可以自动补上。
                 scheduleFallback(player, config, 1);
+                fallbackScheduled = true;
             }
 
             sendWelcome(player, config);
 
             if (target == null) {
                 warnSpawnProblem(spawn);
-            } else if (config.setRespawnLocation()) {
+            } else if (config.setRespawnLocation() && (!fallbackScheduled || appliedAtLogin)) {
+                // 兜底还没完成时，等传送成功后再设置重生点，避免重复触发 PlayerSetSpawnEvent。
                 applyRespawnLocation(player, target, config);
             }
 
             if (config.debug()) {
-                plugin.getLogger().info("[debug] 首次进服玩家 " + player.getName()
-                        + (appliedAtLogin ? "：登录阶段已应用出生点" : "：进入兜底传送流程"));
+                String reason;
+                if (alreadyAtTarget) {
+                    reason = "：已在目标出生点";
+                } else if (appliedAtLogin) {
+                    reason = "：登录阶段已应用出生点";
+                } else if (fallbackScheduled) {
+                    reason = "：进入兜底传送流程";
+                } else {
+                    reason = "：未执行传送（兜底关闭）";
+                }
+                plugin.getLogger().info("[debug] 首次进服玩家 " + player.getName() + reason);
             }
         } catch (Throwable throwable) {
             plugin.getLogger().log(Level.WARNING,
@@ -245,7 +259,9 @@ public final class FirstSpawnService {
         SpawnLocation spawn = config.spawn();
         Location target = spawn.resolve();
         if (target == null) {
+            // 出生点世界可能还没加载：按重试次数继续等待，而不是直接放弃。
             warnSpawnProblem(spawn);
+            retryFallback(player, config, attempt);
             return;
         }
 
@@ -283,8 +299,11 @@ public final class FirstSpawnService {
 
     private void retryFallback(Player player, PluginConfig config, int attempt) {
         if (attempt >= config.fallback().maxAttempts()) {
+            SpawnLocation spawn = config.spawn();
+            String problem = spawn.validationError();
             plugin.getLogger().warning("玩家 " + player.getName()
-                    + " 的首次出生点兜底传送失败，已放弃（目标：" + config.spawn().describe()
+                    + " 的首次出生点兜底传送失败，已放弃（目标：" + spawn.describe()
+                    + (problem == null ? "" : "，原因：" + problem)
                     + "）；请检查目标位置或相关传送插件。");
             return;
         }
@@ -296,7 +315,7 @@ public final class FirstSpawnService {
 
     private static boolean isAtTarget(Player player, Location target) {
         Location current = player.getLocation();
-        return current.getWorld() != null && current.getWorld().equals(target.getWorld())
+        return current.getWorld() != null && current.getWorld() == target.getWorld()
                 && current.getBlockX() == target.getBlockX()
                 && current.getBlockY() == target.getBlockY()
                 && current.getBlockZ() == target.getBlockZ();
