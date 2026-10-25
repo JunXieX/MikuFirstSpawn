@@ -69,7 +69,7 @@ public final class FirstSpawnCommand {
                                                         .then(Commands.argument("pitch", FloatArgumentType.floatArg(-90.0F, 90.0F))
                                                                 .executes(context -> setExplicit(context,
                                                                         FloatArgumentType.getFloat(context, "yaw"),
-                                                                        FloatArgumentType.getFloat(context, "pitch")))))))));
+                                                                        FloatArgumentType.getFloat(context, "pitch"))))))))));
 
         return root.build();
     }
