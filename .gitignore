@@ -1,0 +1,32 @@
+# Gradle
+.gradle/
+build/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 运行期产物
+run/
+logs/
+*.log
+*.db
+*.db-wal
+*.db-shm
+
+# 构建产物（gradle wrapper 除外）
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# 本地交付目录
+dist/
+
+# 会话/工具临时状态
+.local/

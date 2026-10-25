@@ -1,0 +1,38 @@
+# ============================================================
+# MikuFirstSpawn 配置文件
+# 作者：JunXieX  |  MikuMC系列插件交流群：1105054380
+# ============================================================
+
+# 配置版本（请勿手动修改）
+config-version: 1
+
+# 是否启用自动传送。关闭后不会传送任何玩家，但命令仍可使用。
+enabled: true
+
+# 首次进服出生点。
+# world 留空表示尚未设置 —— 此时不会传送任何玩家，请用 /firstspawn set 设置。
+spawn:
+  world: ''
+  x: 0.0
+  y: 64.0
+  z: 0.0
+  yaw: 0.0
+  pitch: 0.0
+
+# 兜底传送：仅当玩家在登录阶段没能直接落到出生点时才执行（例如出生点世界当时未加载）。
+fallback:
+  enabled: true
+  # 提醒：装有登录/传送类插件时可适当调大延迟，避免与它们争抢玩家位置。
+  delay-ticks: 1
+  max-attempts: 3
+  retry-delay-ticks: 20
+
+# 首次出生点是否同时设置为该玩家的重生点（未设置床时死亡会回到这里）。
+set-respawn-location: true
+
+messages:
+  # 首次进服欢迎消息，MiniMessage 格式；{player} 会替换为玩家名；留空则不发送。
+  welcome: '<green>欢迎来到服务器！</green>'
+
+# 调试日志（排查问题时开启）。
+debug: false

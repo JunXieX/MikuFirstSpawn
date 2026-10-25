@@ -1,0 +1,66 @@
+name: Build
+
+on:
+  push:
+    branches: [main, "ci/**"]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Build
+        run: ./gradlew build --no-daemon
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: MikuFirstSpawn
+          retention-days: 3
+          path: build/libs/*.jar
+          if-no-files-found: error
+
+      - name: Check tag and version consistency
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          VER=$(grep -oP '^version\s*=\s*"\K[^"]+' build.gradle.kts)
+          TAG="${REF_NAME#v}"
+          if [ "$VER" != "$TAG" ]; then
+            echo "tag $TAG 与 build.gradle.kts version $VER 不一致" >&2
+            exit 1
+          fi
+          git log -1 --pretty=%B "${REF_NAME}" | tail -n +2 > release_notes.md
+          if [ ! -s release_notes.md ]; then
+            echo "发版提交正文缺少结构化更新日志" >&2
+            exit 1
+          fi
+          cat release_notes.md
+
+      - name: Publish Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: build/libs/*.jar
+          body_path: release_notes.md
