@@ -2,8 +2,8 @@ plugins {
     java
 }
 
-group = "dev.junxiex"
-version = "1.1.0"
+group = providers.gradleProperty("group").get()
+version = providers.gradleProperty("version").get()
 description = "MikuFirstSpawn - first-join spawn plugin for Paper and Folia"
 
 java {

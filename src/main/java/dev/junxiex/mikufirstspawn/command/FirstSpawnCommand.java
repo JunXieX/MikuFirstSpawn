@@ -25,12 +25,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.List;
-import java.util.logging.Level;
 import java.util.stream.Collectors;
 
-/**
- * /firstspawn 命令（Brigadier）。
- */
 public final class FirstSpawnCommand {
 
     public static final String PERMISSION = "mikufirstspawn.admin";
@@ -105,10 +101,10 @@ public final class FirstSpawnCommand {
                 ? "开启（延迟 " + fallback.delayTicks() + " tick，最多 " + fallback.maxAttempts() + " 次）"
                 : "关闭"));
         sender.sendMessage(infoLine("设为重生点", config.setRespawnLocation() ? "是" : "否"));
-        sender.sendMessage(infoLine("欢迎消息", config.welcomeMessage().isEmpty() ? "关闭" : "开启"));
+        sender.sendMessage(infoLine("欢迎消息", config.welcome() != null ? "开启" : "关闭"));
         sender.sendMessage(infoLine("调试日志", config.debug() ? "开启" : "关闭"));
 
-        if (!spawn.configured()) {
+        if (!spawn.isSet()) {
             sender.sendMessage(Component.text("提示：使用 /firstspawn set 设置首次出生点。", NamedTextColor.YELLOW));
         }
         return Command.SINGLE_SUCCESS;
@@ -119,7 +115,8 @@ public final class FirstSpawnCommand {
         sender.sendMessage(Component.text("正在重新读取 config.yml ...", NamedTextColor.GRAY));
         configManager.reloadAsync(result -> {
             if (!result.success()) {
-                String reason = describeError(result.error());
+                Exception error = result.error();
+                String reason = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
                 plugin.getLogger().warning("配置重载失败：" + reason);
                 sendLater(sender, Component.text("配置重载失败：" + reason, NamedTextColor.RED));
                 return;
@@ -153,13 +150,11 @@ public final class FirstSpawnCommand {
             sender.sendMessage(error("出生点不可用：" + spawn.validationError()));
             return 0;
         }
-        player.teleportAsync(target).whenComplete((success, throwable) -> {
-            if (throwable != null) {
-                plugin.getLogger().warning("传送到出生点时发生异常（玩家：" + player.getName() + "）：" + throwable.getMessage());
+        player.teleportAsync(target).whenComplete((success, error) -> {
+            if (error != null) {
+                plugin.getLogger().warning("传送到出生点时发生异常（玩家：" + player.getName() + "）：" + error.getMessage());
                 sendLater(player, error("传送失败，详见控制台日志"));
-                return;
-            }
-            if (Boolean.TRUE.equals(success)) {
+            } else if (Boolean.TRUE.equals(success)) {
                 sendLater(player, Component.text("已传送到出生点。", NamedTextColor.GREEN));
             } else {
                 sendLater(player, error("传送未完成"));
@@ -175,57 +170,55 @@ public final class FirstSpawnCommand {
             return 0;
         }
         Location location = player.getLocation();
-        SpawnLocation spawn = SpawnLocation.of(location.getWorld().getName(),
+        return applySpawn(sender, SpawnLocation.of(location.getWorld().getName(),
                 location.getX(), location.getY(), location.getZ(),
-                location.getYaw(), location.getPitch());
-        return applySpawn(sender, spawn);
+                location.getYaw(), location.getPitch()));
     }
 
     private int setExplicit(CommandContext<CommandSourceStack> context, float yaw, float pitch) {
         CommandSender sender = context.getSource().getSender();
         String worldName = StringArgumentType.getString(context, "world");
-        double x = DoubleArgumentType.getDouble(context, "x");
-        double y = DoubleArgumentType.getDouble(context, "y");
-        double z = DoubleArgumentType.getDouble(context, "z");
-
         World world = Bukkit.getWorld(worldName);
         if (world == null) {
-            sender.sendMessage(error("世界 " + worldName + " 未加载。已加载世界：" + loadedWorldNames()));
+            String loaded = Bukkit.getWorlds().stream().map(World::getName).sorted().collect(Collectors.joining(", "));
+            sender.sendMessage(error("世界 " + worldName + " 未加载。已加载世界：" + loaded));
             return 0;
         }
-        return applySpawn(sender, SpawnLocation.of(worldName, x, y, z, yaw, pitch));
+        return applySpawn(sender, SpawnLocation.of(worldName,
+                DoubleArgumentType.getDouble(context, "x"),
+                DoubleArgumentType.getDouble(context, "y"),
+                DoubleArgumentType.getDouble(context, "z"),
+                yaw, pitch));
     }
 
     private int applySpawn(CommandSender sender, SpawnLocation spawn) {
+        if (!SpawnLocation.hasFiniteCoordinates(spawn.x(), spawn.y(), spawn.z(), spawn.yaw(), spawn.pitch())) {
+            sender.sendMessage(error("出生点坐标必须是有限数值"));
+            return 0;
+        }
         String problem = spawn.validationError();
         if (problem != null) {
             sender.sendMessage(error("出生点无效：" + problem));
             return 0;
         }
-        configManager.updateSpawn(spawn);
+
         sender.sendMessage(Component.text("首次出生点已设置为：" + spawn.describe(), NamedTextColor.GREEN));
-        sender.sendMessage(Component.text("设置已立即生效，正在写入 config.yml。", NamedTextColor.GRAY));
+        sender.sendMessage(Component.text("正在写入 config.yml ...", NamedTextColor.GRAY));
+        configManager.updateSpawn(spawn).thenAccept(saved ->
+                sendLater(sender, saved
+                        ? Component.text("配置已保存。", NamedTextColor.GREEN)
+                        : error("配置写入失败，详见控制台日志")));
         plugin.getLogger().info(sender.getName() + " 设置了首次出生点：" + spawn.describe());
         return Command.SINGLE_SUCCESS;
     }
 
     private void sendLater(CommandSender sender, Component message) {
-        try {
-            if (sender instanceof Player player) {
-                player.getScheduler().execute(plugin, () -> sender.sendMessage(message), null, 0L);
-            } else {
-                // 控制台/RCON 的回复统一回到全局区域线程再发送。
-                Bukkit.getGlobalRegionScheduler().execute(plugin, () -> sender.sendMessage(message));
-            }
-        } catch (RuntimeException exception) {
-            // 插件正在关闭时调度器可能已拒绝任务；此时丢弃反馈即可，不影响玩家。
-            plugin.getLogger().log(Level.WARNING, "发送命令回复失败（插件可能正在关闭）", exception);
+        if (sender instanceof Player player) {
+            player.getScheduler().execute(plugin, () -> sender.sendMessage(message), null, 0L);
+        } else {
+            // 控制台/RCON 的回复统一回到全局区域线程再发送。
+            Bukkit.getGlobalRegionScheduler().execute(plugin, () -> sender.sendMessage(message));
         }
-    }
-
-    private static String describeError(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank() ? exception.getClass().getSimpleName() : message;
     }
 
     private static String platformDescription() {
@@ -234,13 +227,6 @@ public final class FirstSpawnCommand {
                 ? " (build " + buildInfo.buildNumber().getAsInt() + ")"
                 : "";
         return buildInfo.brandName() + " " + buildInfo.minecraftVersionName() + build;
-    }
-
-    private static String loadedWorldNames() {
-        return Bukkit.getWorlds().stream()
-                .map(World::getName)
-                .sorted()
-                .collect(Collectors.joining(", "));
     }
 
     private static Component infoLine(String label, String value) {

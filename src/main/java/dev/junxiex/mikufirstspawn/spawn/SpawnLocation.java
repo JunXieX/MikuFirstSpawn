@@ -7,43 +7,45 @@ import org.bukkit.World;
 import java.util.Locale;
 
 /**
- * 首次出生点值对象。world 名为空表示尚未设置。
+ * 首次出生点。world 为空表示尚未设置。
  */
-public record SpawnLocation(String worldName, double x, double y, double z, float yaw, float pitch, boolean configured) {
-
-    private static final SpawnLocation UNSET =
-            new SpawnLocation("", 0.0D, 64.0D, 0.0D, 0.0F, 0.0F, false);
+public record SpawnLocation(String worldName, double x, double y, double z, float yaw, float pitch) {
 
     public static SpawnLocation unset() {
-        return UNSET;
+        return new SpawnLocation("", 0.0D, 64.0D, 0.0D, 0.0F, 0.0F);
     }
 
     public static SpawnLocation of(String worldName, double x, double y, double z, float yaw, float pitch) {
-        String cleaned = worldName == null ? "" : worldName.trim();
-        return new SpawnLocation(cleaned, x, y, z, yaw, pitch, !cleaned.isEmpty());
+        return new SpawnLocation(worldName.trim(), x, y, z, yaw, pitch);
     }
 
-    public boolean hasFiniteNumbers() {
+    public static boolean hasFiniteCoordinates(double x, double y, double z, float yaw, float pitch) {
         return Double.isFinite(x) && Double.isFinite(y) && Double.isFinite(z)
                 && Float.isFinite(yaw) && Float.isFinite(pitch);
     }
 
-    /** 已加载的世界；未配置或未加载时返回 null。 */
-    public World loadedWorld() {
-        return configured ? Bukkit.getWorld(worldName) : null;
+    public boolean isSet() {
+        return !worldName.isEmpty();
     }
 
-    /**
-     * 返回出生点不可用的原因；可用时返回 null。
-     */
+    /** 出生点当前可传送时返回 Location；否则返回 null。 */
+    public Location resolve() {
+        if (!isSet()) {
+            return null;
+        }
+        World world = Bukkit.getWorld(worldName);
+        if (world == null || y < world.getMinHeight() || y > world.getMaxHeight()) {
+            return null;
+        }
+        return new Location(world, x, y, z, yaw, pitch);
+    }
+
+    /** 返回出生点不可用的原因；可用时返回 null。 */
     public String validationError() {
-        if (!configured) {
+        if (!isSet()) {
             return "spawn.world 为空（尚未设置出生点）";
         }
-        if (!hasFiniteNumbers()) {
-            return "坐标包含 NaN/Infinity";
-        }
-        World world = loadedWorld();
+        World world = Bukkit.getWorld(worldName);
         if (world == null) {
             return "世界 " + worldName + " 未加载";
         }
@@ -54,22 +56,8 @@ public record SpawnLocation(String worldName, double x, double y, double z, floa
         return null;
     }
 
-    /**
-     * 解析为可传送的 Location；不可用时返回 null。
-     */
-    public Location resolve() {
-        if (!configured || !hasFiniteNumbers()) {
-            return null;
-        }
-        World world = loadedWorld();
-        if (world == null || y < world.getMinHeight() || y > world.getMaxHeight()) {
-            return null;
-        }
-        return new Location(world, x, y, z, yaw, pitch);
-    }
-
     public String describe() {
-        if (!configured) {
+        if (!isSet()) {
             return "未设置";
         }
         return worldName + " (" + format(x) + ", " + format(y) + ", " + format(z) + ")"

@@ -7,6 +7,8 @@ import dev.junxiex.mikufirstspawn.listener.PlayerJoinListener;
 import dev.junxiex.mikufirstspawn.listener.ServerLifecycleListener;
 import dev.junxiex.mikufirstspawn.listener.SpawnLocationListener;
 import dev.junxiex.mikufirstspawn.service.FirstSpawnService;
+import org.bukkit.permissions.Permission;
+import org.bukkit.permissions.PermissionDefault;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.concurrent.ExecutorService;
@@ -17,15 +19,16 @@ import java.util.logging.Level;
 /**
  * MikuFirstSpawn 入口。
  *
- * <p>onEnable 阶段不访问任何世界数据：Bukkit 的世界在插件启用之后才会加载，
- * 出生点世界的解析全部延迟到实际使用时进行。</p>
+ * <p>onEnable 阶段不访问世界：Bukkit 的世界在插件启用之后才会加载，出生点世界延迟到实际使用时解析。</p>
  */
 public final class MikuFirstSpawnPlugin extends JavaPlugin {
 
     private ExecutorService ioExecutor;
+    private boolean permissionRegistered;
 
     @Override
     public void onEnable() {
+        registerPermission();
         saveDefaultConfig();
 
         ioExecutor = Executors.newSingleThreadExecutor(runnable -> {
@@ -56,6 +59,9 @@ public final class MikuFirstSpawnPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (permissionRegistered) {
+            getServer().getPluginManager().removePermission(FirstSpawnCommand.PERMISSION);
+        }
         if (ioExecutor == null) {
             return;
         }
@@ -67,5 +73,14 @@ public final class MikuFirstSpawnPlugin extends JavaPlugin {
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    private void registerPermission() {
+        if (getServer().getPluginManager().getPermission(FirstSpawnCommand.PERMISSION) != null) {
+            return;
+        }
+        getServer().getPluginManager().addPermission(new Permission(
+                FirstSpawnCommand.PERMISSION, "MikuFirstSpawn 管理权限", PermissionDefault.OP));
+        permissionRegistered = true;
     }
 }

@@ -27,7 +27,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-          cache: gradle
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
@@ -38,23 +40,37 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          VER=$(grep -oP '^version\s*=\s*"\K[^"]+' build.gradle.kts)
+          VER=$(grep -oP '^version=\K.*' gradle.properties)
           TAG="${REF_NAME#v}"
           if [ "$VER" != "$TAG" ]; then
-            echo "tag $TAG 与 build.gradle.kts version $VER 不一致" >&2
+            echo "tag $TAG 与 gradle.properties version $VER 不一致" >&2
             exit 1
           fi
-          git log -1 --pretty=%B "${REF_NAME}" | tail -n +2 | sed '/./,$!d' > release_notes.md
+          git log -1 --pretty=%b "${REF_NAME}" | sed '/./,$!d' > release_notes.md
           if [ ! -s release_notes.md ]; then
             echo "发版提交正文缺少结构化更新日志" >&2
             exit 1
           fi
           cat release_notes.md
 
+      - name: Check existing release
+        id: release_check
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build
+        if: steps.release_check.outputs.exists != 'true'
         run: ./gradlew build --no-daemon
 
       - name: Upload build artifact
+        if: steps.release_check.outputs.exists != 'true'
         uses: actions/upload-artifact@v7
         with:
           name: MikuFirstSpawn
@@ -63,7 +79,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish Release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && steps.release_check.outputs.exists != 'true'
         uses: softprops/action-gh-release@v3
         with:
           files: build/libs/*.jar

@@ -5,7 +5,3 @@ api-version: '26.3'
 folia-supported: true
 author: JunXieX
 description: 首次进服出生点插件（Paper/Folia）
-permissions:
-  mikufirstspawn.admin:
-    description: MikuFirstSpawn 管理权限
-    default: op
