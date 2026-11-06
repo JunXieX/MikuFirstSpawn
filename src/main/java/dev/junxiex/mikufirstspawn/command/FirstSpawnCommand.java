@@ -101,7 +101,9 @@ public final class FirstSpawnCommand {
                 ? "开启（延迟 " + fallback.delayTicks() + " tick，最多 " + fallback.maxAttempts() + " 次）"
                 : "关闭"));
         sender.sendMessage(infoLine("设为重生点", config.setRespawnLocation() ? "是" : "否"));
-        sender.sendMessage(infoLine("欢迎消息", config.welcome() != null ? "开启" : "关闭"));
+        String welcomeState = config.welcome() == null ? "关闭"
+                : config.enabled() ? "开启" : "开启（插件关闭时不发送）";
+        sender.sendMessage(infoLine("欢迎消息", welcomeState));
         sender.sendMessage(infoLine("调试日志", config.debug() ? "开启" : "关闭"));
 
         if (!spawn.isSet()) {

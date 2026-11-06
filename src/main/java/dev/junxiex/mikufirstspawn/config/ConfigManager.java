@@ -74,11 +74,10 @@ public final class ConfigManager {
         ioExecutor.execute(() -> {
             try {
                 YamlConfiguration disk = readFromDisk();
-                PluginConfig diskConfig = parse(disk);
                 writeSpawn(disk, spawn);
-                snapshot = new PluginConfig(diskConfig.enabled(), spawn, diskConfig.fallback(),
-                        diskConfig.setRespawnLocation(), diskConfig.welcomeText(), diskConfig.welcome(),
-                        diskConfig.debug());
+                PluginConfig previous = snapshot;
+                snapshot = new PluginConfig(previous.enabled(), spawn, previous.fallback(),
+                        previous.setRespawnLocation(), previous.welcome(), previous.debug());
                 result.complete(true);
             } catch (Exception exception) {
                 plugin.getLogger().log(Level.SEVERE, "保存出生点失败，config.yml 未修改", exception);
@@ -131,7 +130,6 @@ public final class ConfigManager {
             } catch (RuntimeException exception) {
                 plugin.getLogger().log(Level.WARNING,
                         "messages.welcome 不是合法的 MiniMessage 文本，已关闭欢迎消息", exception);
-                welcomeText = "";
             }
         }
 
@@ -140,7 +138,6 @@ public final class ConfigManager {
                 spawn,
                 new PluginConfig.Fallback(fallbackEnabled, delayTicks, maxAttempts, retryDelayTicks),
                 yaml.getBoolean("set-respawn-location", true),
-                welcomeText,
                 welcome,
                 yaml.getBoolean("debug", false));
     }
@@ -191,7 +188,11 @@ public final class ConfigManager {
                 Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException exception) {
-            Files.deleteIfExists(temporary);
+            try {
+                Files.deleteIfExists(temporary);
+            } catch (IOException ignored) {
+                // 保留原始写入异常。
+            }
             throw exception;
         }
     }

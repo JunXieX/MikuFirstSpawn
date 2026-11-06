@@ -11,7 +11,6 @@ public record PluginConfig(
         SpawnLocation spawn,
         Fallback fallback,
         boolean setRespawnLocation,
-        String welcomeText,
         Component welcome,
         boolean debug
 ) {
@@ -21,6 +20,6 @@ public record PluginConfig(
 
     public static PluginConfig disabled() {
         return new PluginConfig(false, SpawnLocation.unset(),
-                new Fallback(false, 1L, 1, 20L), false, "", null, false);
+                new Fallback(false, 1L, 1, 20L), false, null, false);
     }
 }

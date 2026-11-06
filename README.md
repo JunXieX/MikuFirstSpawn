@@ -39,9 +39,9 @@ MikuFirstSpawn 让新玩家第一次进入服务器时直接出现在管理员�
 | `spawn.x` / `spawn.y` / `spawn.z` | 出生点坐标 | `0 / 64 / 0` |
 | `spawn.yaw` / `spawn.pitch` | 出生朝向 | `0 / 0` |
 | `fallback.enabled` | 登录阶段未成功应用时，进服后是否尝试补传送（最多 `fallback.max-attempts` 次） | `true` |
-| `fallback.delay-ticks` | 兜底传送延迟（tick） | `1` |
-| `fallback.max-attempts` | 兜底传送最多尝试次数 | `3` |
-| `fallback.retry-delay-ticks` | 兜底传送重试间隔（tick） | `20` |
+| `fallback.delay-ticks` | 兜底传送延迟（tick，0-200） | `1` |
+| `fallback.max-attempts` | 兜底传送最多尝试次数（1-20） | `3` |
+| `fallback.retry-delay-ticks` | 兜底传送重试间隔（tick，1-200） | `20` |
 | `set-respawn-location` | 是否把首次出生点同时设为该玩家的重生点 | `true` |
 | `messages.welcome` | 首次进服欢迎消息（MiniMessage）；留空则关闭 | 见默认配置 |
 | `debug` | 调试日志 | `false` |
