@@ -175,8 +175,11 @@ public final class FirstSpawnService {
 
     private void retryFallback(Player player, PluginConfig config, int attempt) {
         if (attempt >= config.fallback().maxAttempts()) {
+            SpawnLocation spawn = config.spawn();
+            String problem = spawn.validationError();
             plugin.getLogger().warning("玩家 " + player.getName()
-                    + " 的首次出生点兜底传送失败，已放弃（目标：" + config.spawn().describe()
+                    + " 的首次出生点兜底传送失败，已放弃（目标：" + spawn.describe()
+                    + (problem == null ? "" : "，原因：" + problem)
                     + "）；请检查目标位置或相关传送插件。");
             return;
         }

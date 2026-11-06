@@ -204,10 +204,16 @@ public final class FirstSpawnCommand {
 
         sender.sendMessage(Component.text("首次出生点已设置为：" + spawn.describe(), NamedTextColor.GREEN));
         sender.sendMessage(Component.text("正在写入 config.yml ...", NamedTextColor.GRAY));
-        configManager.updateSpawn(spawn).thenAccept(saved ->
-                sendLater(sender, saved
-                        ? Component.text("配置已保存。", NamedTextColor.GREEN)
-                        : error("配置写入失败，详见控制台日志")));
+        configManager.updateSpawn(spawn).thenAccept(saved -> {
+            if (saved) {
+                plugin.getLogger().info("出生点配置已保存：" + spawn.describe());
+            } else {
+                plugin.getLogger().warning("出生点配置写入失败：" + spawn.describe());
+            }
+            sendLater(sender, saved
+                    ? Component.text("配置已保存。", NamedTextColor.GREEN)
+                    : error("配置写入失败，详见控制台日志"));
+        });
         plugin.getLogger().info(sender.getName() + " 设置了首次出生点：" + spawn.describe());
         return Command.SINGLE_SUCCESS;
     }
