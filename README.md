@@ -38,7 +38,7 @@ MikuFirstSpawn 让新玩家第一次进入服务器时直接出现在管理员�
 | `spawn.world` | 出生点世界名；**留空表示尚未设置，不会传送任何玩家** | `''` |
 | `spawn.x` / `spawn.y` / `spawn.z` | 出生点坐标 | `0 / 64 / 0` |
 | `spawn.yaw` / `spawn.pitch` | 出生朝向 | `0 / 0` |
-| `fallback.enabled` | 登录阶段未成功应用时，进服后是否补一次传送 | `true` |
+| `fallback.enabled` | 登录阶段未成功应用时，进服后是否尝试补传送（最多 `fallback.max-attempts` 次） | `true` |
 | `fallback.delay-ticks` | 兜底传送延迟（tick） | `1` |
 | `fallback.max-attempts` | 兜底传送最多尝试次数 | `3` |
 | `fallback.retry-delay-ticks` | 兜底传送重试间隔（tick） | `20` |
@@ -46,7 +46,7 @@ MikuFirstSpawn 让新玩家第一次进入服务器时直接出现在管理员�
 | `messages.welcome` | 首次进服欢迎消息（MiniMessage）；留空则关闭 | 见默认配置 |
 | `debug` | 调试日志 | `false` |
 
-修改配置后执行 `/firstspawn reload` 生效。使用 `/firstspawn set` 保存时，插件会先读取当前 `config.yml`、只更新出生点并写回标准结构：插件注释会刷新，非插件配置项不会保留。
+修改配置后执行 `/firstspawn reload` 生效。使用 `/firstspawn set` 保存时，插件会先读取当前 `config.yml`、只更新出生点；其他配置项与自定义键保留，插件自带注释会刷新。
 
 ## 命令
 

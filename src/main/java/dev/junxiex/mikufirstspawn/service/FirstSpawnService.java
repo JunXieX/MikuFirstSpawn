@@ -46,8 +46,8 @@ public final class FirstSpawnService {
             if (config.debug()) {
                 plugin.getLogger().info("[debug] 登录阶段已应用首次出生点：" + spawn.describe());
             }
-        } catch (RuntimeException exception) {
-            // 配置阶段抛出异常会阻断登录，这里必须兜住。
+        } catch (Throwable exception) {
+            // 配置阶段抛出任何异常都可能阻断登录，这里必须兜住。
             plugin.getLogger().log(Level.WARNING,
                     "处理登录出生点事件时发生异常（已忽略，玩家使用默认出生点）", exception);
         }
@@ -64,6 +64,7 @@ public final class FirstSpawnService {
                 return;
             }
             SpawnLocation spawn = config.spawn();
+            sendWelcome(player, config);
             if (!spawn.isSet()) {
                 return;
             }
@@ -77,9 +78,7 @@ public final class FirstSpawnService {
                         config.fallback().delayTicks());
             }
 
-            sendWelcome(player, config);
-
-            if (target != null && config.setRespawnLocation() && (!fallback || atTarget)) {
+            if (target != null && config.setRespawnLocation() && !fallback) {
                 // 兜底占用中时等传送成功后再设置重生点，避免重复触发 PlayerSetSpawnEvent。
                 applyRespawnLocation(player, target);
             }
@@ -88,7 +87,7 @@ public final class FirstSpawnService {
                 String reason = atTarget ? "已在目标出生点" : fallback ? "进入兜底传送流程" : "未执行传送（兜底关闭）";
                 plugin.getLogger().info("[debug] 首次进服玩家 " + player.getName() + "：" + reason);
             }
-        } catch (RuntimeException exception) {
+        } catch (Throwable exception) {
             plugin.getLogger().log(Level.WARNING,
                     "处理首次进服逻辑时发生异常（已忽略，不影响玩家进服）", exception);
         }

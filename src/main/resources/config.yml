@@ -19,7 +19,7 @@ spawn:
 # 兜底传送：仅当玩家在登录阶段没能直接落到出生点时才执行（例如出生点世界当时未加载）。
 fallback:
   enabled: true
-  # 提醒：装有登录/传送类插件时可适当调大延迟，避免与它们争抢玩家位置。
+  # 提醒：装有登录/传送类插件时可适当调大 delay-ticks，避免与它们争抢玩家位置。
   delay-ticks: 1
   max-attempts: 3
   retry-delay-ticks: 20

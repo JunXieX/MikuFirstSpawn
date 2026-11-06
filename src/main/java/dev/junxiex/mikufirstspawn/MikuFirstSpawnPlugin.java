@@ -28,7 +28,6 @@ public final class MikuFirstSpawnPlugin extends JavaPlugin {
 
     @Override
     public void onEnable() {
-        registerPermission();
         saveDefaultConfig();
 
         ioExecutor = Executors.newSingleThreadExecutor(runnable -> {
@@ -39,6 +38,7 @@ public final class MikuFirstSpawnPlugin extends JavaPlugin {
 
         ConfigManager configManager = new ConfigManager(this, ioExecutor);
         configManager.loadInitial();
+        registerPermission();
 
         FirstSpawnService service = new FirstSpawnService(this, configManager);
         getServer().getPluginManager().registerEvents(new SpawnLocationListener(service), this);

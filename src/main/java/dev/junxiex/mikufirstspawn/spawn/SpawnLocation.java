@@ -19,9 +19,10 @@ public record SpawnLocation(String worldName, double x, double y, double z, floa
         return new SpawnLocation(worldName.trim(), x, y, z, yaw, pitch);
     }
 
-    public static boolean hasFiniteCoordinates(double x, double y, double z, float yaw, float pitch) {
+    public static boolean hasValidCoordinates(double x, double y, double z, float yaw, float pitch) {
         return Double.isFinite(x) && Double.isFinite(y) && Double.isFinite(z)
-                && Float.isFinite(yaw) && Float.isFinite(pitch);
+                && Float.isFinite(yaw) && Float.isFinite(pitch)
+                && Math.abs(x) <= 3.0E7D && Math.abs(z) <= 3.0E7D;
     }
 
     public boolean isSet() {

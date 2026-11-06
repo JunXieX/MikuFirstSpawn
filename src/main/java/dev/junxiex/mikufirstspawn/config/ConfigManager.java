@@ -69,18 +69,16 @@ public final class ConfigManager {
         });
     }
 
-    /**
-     * 先读取磁盘上的当前配置，只替换出生点后写回，避免覆盖管理员同时修改的其他配置项。
-     */
     public CompletableFuture<Boolean> updateSpawn(SpawnLocation spawn) {
         CompletableFuture<Boolean> result = new CompletableFuture<>();
         ioExecutor.execute(() -> {
             try {
-                PluginConfig disk = parse(readFromDisk());
-                PluginConfig updated = new PluginConfig(disk.enabled(), spawn, disk.fallback(),
-                        disk.setRespawnLocation(), disk.welcomeText(), disk.welcome(), disk.debug());
-                write(updated);
-                snapshot = updated;
+                YamlConfiguration disk = readFromDisk();
+                PluginConfig diskConfig = parse(disk);
+                writeSpawn(disk, spawn);
+                snapshot = new PluginConfig(diskConfig.enabled(), spawn, diskConfig.fallback(),
+                        diskConfig.setRespawnLocation(), diskConfig.welcomeText(), diskConfig.welcome(),
+                        diskConfig.debug());
                 result.complete(true);
             } catch (Exception exception) {
                 plugin.getLogger().log(Level.SEVERE, "保存出生点失败，config.yml 未修改", exception);
@@ -106,16 +104,13 @@ public final class ConfigManager {
         double z = yaml.getDouble("spawn.z", 0.0D);
         float yaw = (float) yaml.getDouble("spawn.yaw", 0.0D);
         float pitch = (float) yaml.getDouble("spawn.pitch", 0.0D);
-        if (!Float.isFinite(pitch)) {
-            pitch = 0.0F;
-        }
         pitch = Math.max(-90.0F, Math.min(90.0F, pitch));
 
         SpawnLocation spawn;
-        if (SpawnLocation.hasFiniteCoordinates(x, y, z, yaw, pitch)) {
+        if (SpawnLocation.hasValidCoordinates(x, y, z, yaw, pitch)) {
             spawn = SpawnLocation.of(world, x, y, z, yaw, pitch);
         } else {
-            plugin.getLogger().warning("config.yml 的 spawn 坐标包含 NaN/Infinity，已按未设置处理");
+            plugin.getLogger().warning("config.yml 的 spawn 坐标非法（NaN/Infinity 或 X/Z 超出 ±30000000），已按未设置处理");
             spawn = SpawnLocation.unset();
         }
 
@@ -150,50 +145,37 @@ public final class ConfigManager {
                 yaml.getBoolean("debug", false));
     }
 
-    private void write(PluginConfig config) throws IOException {
-        YamlConfiguration yaml = new YamlConfiguration();
-        yaml.options().setHeader(List.of(
-                "============================================================",
-                "MikuFirstSpawn 配置文件",
-                "作者：JunXieX  |  MikuMC系列插件交流群：1105054380",
-                "============================================================"));
-
-        yaml.set("enabled", config.enabled());
-        yaml.setComments("enabled", List.of("是否启用自动传送。关闭后不会传送任何玩家，但命令仍可使用。"));
-
-        SpawnLocation spawn = config.spawn();
+    private void writeSpawn(YamlConfiguration yaml, SpawnLocation spawn) throws IOException {
         yaml.set("spawn.world", spawn.worldName());
         yaml.set("spawn.x", spawn.x());
         yaml.set("spawn.y", spawn.y());
         yaml.set("spawn.z", spawn.z());
         yaml.set("spawn.yaw", spawn.yaw());
         yaml.set("spawn.pitch", spawn.pitch());
+        applyComments(yaml);
+        writeAtomically(yaml.saveToString());
+    }
+
+    private static void applyComments(YamlConfiguration yaml) {
+        yaml.options().setHeader(List.of(
+                "============================================================",
+                "MikuFirstSpawn 配置文件",
+                "作者：JunXieX  |  MikuMC系列插件交流群：1105054380",
+                "============================================================"));
+
+        yaml.setComments("enabled", List.of("是否启用自动传送。关闭后不会传送任何玩家，但命令仍可使用。"));
         yaml.setComments("spawn", List.of(
                 "首次进服出生点。world 留空表示尚未设置 —— 此时不会传送任何玩家，请用 /firstspawn set 设置。"));
         yaml.setComments("spawn.world", List.of("世界名称（必须由服务器加载）"));
-
-        PluginConfig.Fallback fallback = config.fallback();
-        yaml.set("fallback.enabled", fallback.enabled());
-        yaml.set("fallback.delay-ticks", fallback.delayTicks());
-        yaml.set("fallback.max-attempts", fallback.maxAttempts());
-        yaml.set("fallback.retry-delay-ticks", fallback.retryDelayTicks());
         yaml.setComments("fallback", List.of(
                 "兜底传送：仅当玩家在登录阶段没能直接落到出生点时才执行（例如出生点世界当时未加载）。",
                 "装有登录/传送类插件时可适当调大 delay-ticks，避免与它们争抢玩家位置。"));
-
-        yaml.set("set-respawn-location", config.setRespawnLocation());
         yaml.setComments("set-respawn-location", List.of(
                 "首次出生点是否同时设置为该玩家的重生点（未设置床时死亡会回到这里）。"));
-
-        yaml.set("messages.welcome", config.welcomeText());
         yaml.setComments("messages", List.of("提示消息。"));
         yaml.setComments("messages.welcome", List.of(
                 "首次进服欢迎消息，MiniMessage 格式；{player} 会替换为玩家名；留空则不发送。"));
-
-        yaml.set("debug", config.debug());
         yaml.setComments("debug", List.of("调试日志（排查问题时开启）。"));
-
-        writeAtomically(yaml.saveToString());
     }
 
     private void writeAtomically(String content) throws IOException {

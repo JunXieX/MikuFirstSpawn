@@ -184,7 +184,7 @@ public final class FirstSpawnCommand {
             sender.sendMessage(error("世界 " + worldName + " 未加载。已加载世界：" + loaded));
             return 0;
         }
-        return applySpawn(sender, SpawnLocation.of(worldName,
+        return applySpawn(sender, SpawnLocation.of(world.getName(),
                 DoubleArgumentType.getDouble(context, "x"),
                 DoubleArgumentType.getDouble(context, "y"),
                 DoubleArgumentType.getDouble(context, "z"),
@@ -192,8 +192,8 @@ public final class FirstSpawnCommand {
     }
 
     private int applySpawn(CommandSender sender, SpawnLocation spawn) {
-        if (!SpawnLocation.hasFiniteCoordinates(spawn.x(), spawn.y(), spawn.z(), spawn.yaw(), spawn.pitch())) {
-            sender.sendMessage(error("出生点坐标必须是有限数值"));
+        if (!SpawnLocation.hasValidCoordinates(spawn.x(), spawn.y(), spawn.z(), spawn.yaw(), spawn.pitch())) {
+            sender.sendMessage(error("出生点坐标非法（需为有限数值，X/Z 在 ±30000000 内）"));
             return 0;
         }
         String problem = spawn.validationError();
@@ -202,19 +202,17 @@ public final class FirstSpawnCommand {
             return 0;
         }
 
-        sender.sendMessage(Component.text("首次出生点已设置为：" + spawn.describe(), NamedTextColor.GREEN));
         sender.sendMessage(Component.text("正在写入 config.yml ...", NamedTextColor.GRAY));
         configManager.updateSpawn(spawn).thenAccept(saved -> {
             if (saved) {
                 plugin.getLogger().info("出生点配置已保存：" + spawn.describe());
+                sendLater(sender, Component.text("首次出生点已设置为：" + spawn.describe() + "，配置已保存。",
+                        NamedTextColor.GREEN));
             } else {
                 plugin.getLogger().warning("出生点配置写入失败：" + spawn.describe());
+                sendLater(sender, error("配置写入失败，详见控制台日志"));
             }
-            sendLater(sender, saved
-                    ? Component.text("配置已保存。", NamedTextColor.GREEN)
-                    : error("配置写入失败，详见控制台日志"));
         });
-        plugin.getLogger().info(sender.getName() + " 设置了首次出生点：" + spawn.describe());
         return Command.SINGLE_SUCCESS;
     }
 
